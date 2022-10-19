@@ -1,7 +1,6 @@
 package com.robaho.jleveldb;
 
 import java.io.*;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,7 +20,7 @@ class DiskIO {
         var keyFilename = String.format("%s/keys.%ld.%ld",db.path,lowerId,upperId);
         var dataFilename = String.format("%s/data.%ld.%ld",db.path,lowerId,upperId);
 
-        DiskSegment ds = writeAndLoadSegment(keyFilename, dataFilename, itr, false);
+        writeAndLoadSegment(keyFilename, dataFilename, itr, false);
         seg.removeSegment();
     }
 
@@ -129,36 +128,6 @@ class DiskIO {
         return new DiskKey(key.length,key);
     }
 
-    private static class DecodedKeyLen {
-        final int prefixLen;
-        final int compressedLen;
-
-        public DecodedKeyLen(int prefixLen, int compressedLen) {
-            this.prefixLen = prefixLen;
-            this.compressedLen = compressedLen;
-        }
-    }
-
-    private static DecodedKeyLen decodeKeyLen(short keylen) {
-        int prefixLen=0,compressedLen=0;
-        if ((keylen & Constants.compressedBit) != 0) {
-            prefixLen = (keylen >> 8) & Constants.maxPrefixLen;
-            compressedLen = keylen & Constants.maxCompressedLen;
-            if (prefixLen > Constants.maxPrefixLen || compressedLen > Constants.maxCompressedLen) {
-                throw new IllegalStateException("invalid prefix/compressed length,"+prefixLen+" "+compressedLen);
-            }
-        } else {
-            if(keylen > Constants.maxKeySize) {
-                throw new IllegalStateException("key > 1024");
-            }
-            compressedLen = keylen;
-        }
-        if(compressedLen == 0) {
-            throw new IllegalStateException("decoded key length is 0");
-        }
-        return new DecodedKeyLen(prefixLen,compressedLen);
-    }
-
     private static class DiskKey {
         final int keylen;
         final byte[] compressedKey;
@@ -168,16 +137,6 @@ class DiskIO {
             this.compressedKey = key;
         }
     };
-
-
-    private static byte[] decodeKey(byte[] key,byte[] prevKey,int prefixLen) {
-        if(prefixLen==0)
-            return key;
-        byte[] key_ = new byte[prefixLen+key.length];
-        System.arraycopy(prevKey,0,key_,0,prefixLen);
-        System.arraycopy(key,0,key_,prefixLen,key.length);
-        return key_;
-    }
 
     private static int calculatePrefixLen(byte[] prevKey,byte[] key) {
         if(prevKey == null) {

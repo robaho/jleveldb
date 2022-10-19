@@ -16,7 +16,7 @@ public class Performance {
 
         var start = System.currentTimeMillis();
         for (int i = 0; i < nr; i++ ){
-            db.put(String.format("mykey%7d", i).getBytes(), String.format("myvalue", i).getBytes());
+            db.put(String.format("mykey%7d", i).getBytes(), String.format("myvalue%d", i).getBytes());
         }
 
         var end = System.currentTimeMillis();
@@ -45,8 +45,8 @@ public class Performance {
     private static void testRead() throws IOException, DatabaseException {
         Database db = Database.open("testdb/mydb", new Options(false));
         System.out.println("number of segments "+db.stats().numberOfSegments);
-        var start = System.currentTimeMillis();
 
+        var start = System.currentTimeMillis();
         LookupIterator itr = db.lookup(null,null);
         int count = 0;
         while(true) {

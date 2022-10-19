@@ -1,8 +1,9 @@
-Java version of [keydb](https://github.com/robaho/keydb) - an ultra fast key/value database.
+Java version of [robaho/leveldb](https://github.com/robaho/leveldb) - an ultra fast key/value database with Google LevelDB api.
 
-It lacks most of the test cases of the Go version, but is binary file compatible. It was primarily created to test the performance difference between Go and Java.
+TODO:
 
-Performance numbers using the GraalVM on OSX 11.1 2015 iMac 4ghz i7
+sequences are not supported
+user defined key comparisons do not work
 
 ```
 insert time 10000000 records = 15443ms, usec per op 1.5443

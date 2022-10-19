@@ -76,6 +76,10 @@ public class DiskSegmentTest extends TestCase {
         if (!Arrays.equals(value,"myvalue1".getBytes())) {
             fail("incorrect values");
         }
+        value = ds.get("mykey500000".getBytes());
+        if (!Arrays.equals(value,"myvalue500000".getBytes())) {
+            fail("incorrect values");
+        }
     }
     public void testEmptySegment() throws IOException {
         File dir = new File("testdb");

@@ -98,13 +98,27 @@ class MemorySegment implements Segment {
         }
     }
 
+    private static Removable createRemovable(MemorySegment ms) {
+        final LogFile log = ms.log;
+        return new Removable() {
+            @Override
+            public void remove() throws IOException {
+                if(log!=null)
+                    log.remove();
+            }
+            public String toString() {
+                return "LogFile:"+ log.filepath;
+            }
+        };
+
+    }
+
     @Override
     public void removeOnFinalize() {
-        Deleter.removeOnFinalize(this);
+        Deleter.removeOnFinalize(this, createRemovable(this));
     }
 
     public void removeSegment() throws IOException {
-        close();
         if(log!=null) {
             log.remove();
         }

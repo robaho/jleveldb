@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/jkeydb.iml" filepath="$PROJECT_DIR$/jkeydb.iml" />
+      <module fileurl="file://$PROJECT_DIR$/jleveldb.iml" filepath="$PROJECT_DIR$/jleveldb.iml" />
     </modules>
   </component>
 </project>

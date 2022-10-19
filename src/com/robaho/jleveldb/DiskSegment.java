@@ -48,20 +48,18 @@ class DiskSegment implements Segment {
             return Collections.emptyList();
         }
 
-        byte[] buffer = new byte[keyBlockSize];
-        ByteBuffer bb = ByteBuffer.wrap(buffer).order(ByteOrder.BIG_ENDIAN);
+        ByteBuffer bb = ByteBuffer.allocateDirect(keyBlockSize).order(ByteOrder.BIG_ENDIAN);
         List<byte[]> keyIndex = new ArrayList<byte[]>();
         long block;
 
         for(block = 0; block < keyBlocks; block += keyIndexInterval) {
-            bb.clear();
-            keyFile.readAt(bb,block*keyBlockSize);
-            int keylen = bb.getShort(0) & 0xFFFF;
+            keyFile.readAt(bb,block*keyBlockSize,maxKeySize+2); // read start key in block
+            int keylen = bb.getShort() & 0xFFFF;
             if(keylen == endOfBlock) {
                 break;
             }
             byte[] keycopy = new byte[keylen];
-            System.arraycopy(buffer,2,keycopy,0,keylen);
+            bb.get(keycopy);
             keyIndex.add(keycopy);
         }
         return keyIndex;
@@ -116,7 +114,7 @@ class DiskSegment implements Segment {
             }
             return result;
         });
-        System.out.println("found "+segments.size()+" before pruning");
+        int pruneCount=0;
 next:
         for (int i=0;i<segments.size();) {
             Segment seg = segments.get(i);
@@ -125,11 +123,14 @@ next:
                 if(seg.lowerID() >= seg0.lowerID() && seg.upperID() <= seg0.upperID()) {
                     segments.remove(i);
                     seg.removeSegment();
+                    pruneCount++;
                     continue next;
                 }
             }
             i++;
         }
+        if(pruneCount>0)
+            System.out.println("pruned "+pruneCount+" segments at open");
         return segments;
     }
 
@@ -170,23 +171,44 @@ next:
     public LookupIterator lookup(byte[] lower, byte[] upper) throws IOException {
         if(keyFile.length()==0)
             return LookupIterator.EMPTY;
-        ByteBuffer buffer = ByteBuffer.allocate(keyBlockSize).order(ByteOrder.BIG_ENDIAN);
+
+        ByteBuffer buffer = ByteBuffer.allocateDirect(keyBlockSize).order(ByteOrder.BIG_ENDIAN);
         long block = 0;
         if(lower != null) {
-            long startBlock = binarySearch0(0, keyBlocks-1, lower, buffer);
+            LowHigh lh = indexSearch(lower);
+            if(lh==null)
+                return LookupIterator.EMPTY;
+            long startBlock = binarySearch0(lh.low, lh.high, lower, buffer);
             if(startBlock<0)
                 return null;
             block = startBlock;
         }
-        buffer.clear();
         keyFile.readAt(buffer,block* keyBlockSize);
-        buffer.flip();
         return new DiskSegmentIterator(this,lower,upper,buffer,block);
+    }
+
+    private static Removable createRemovable(DiskSegment ds) {
+        final var keyfile = ds.keyFile;
+        final var datafile = ds.dataFile;
+        final var keyname = ds.keyfilename;
+        final var dataname = ds.datafilename;
+        return new Removable() {
+            @Override
+            public void remove() throws IOException {
+                keyfile.close();
+                datafile.close();
+                Files.deleteIfExists(Path.of(keyname));
+                Files.deleteIfExists(Path.of(dataname));
+            }
+            public String toString() {
+                return "DiskSegment:"+keyname+","+dataname;
+            }
+        };
     }
 
     @Override
     public void removeOnFinalize() {
-        //TODO fix me
+        Deleter.removeOnFinalize(this,createRemovable(this));
     }
 
     @Override
@@ -203,43 +225,68 @@ next:
         }
     }
 
+    private static class LowHigh {
+        final long low, high;
+
+        public LowHigh(long low, long high) {
+            this.low=low;
+            this.high=high;
+        }
+    }
+
+    private static class ReadStats {
+        int reads;
+        int scanRows;
+    }
+
     private OffsetLen binarySearch(byte[] key) throws IOException {
-        ByteBuffer buffer = ByteBuffer.allocate(maxKeySize+2).order(ByteOrder.BIG_ENDIAN); // enough to hold the first key of key block
+        ByteBuffer buffer = bufferCache.get();
 
-        long lowblock = 0;
-        long highblock = keyBlocks - 1;
+        LowHigh lh = indexSearch(key);
+        if(lh==null)
+            return null;
 
-        if (keyIndex != null) { // we have memory index, so narrow block range down
-//            System.out.println("looking for "+new String(key));
-//            for(byte[] b : keyIndex) {
-//                System.out.println(new String(b));
-//            }
-            int index = Collections.binarySearch(keyIndex,key,new Comparator<byte[]>() {
-                @Override
-                public int compare(byte[] o1, byte[] o2) {
-                    return Arrays.compare(o1,o2);
-                }
-            });
-            if(index>=0) {
-                highblock = lowblock = index* keyIndexInterval;
-            } else {
-                index = (index*-1) - 1;
-                if(index == 0)  {
-                    return null;
-                }
-                index--;
+        long block = binarySearch0(lh.low, lh.high, key, buffer);
 
-                lowblock = index * keyIndexInterval;
-                highblock = lowblock + keyIndexInterval;
-            }
+        return scanBlock(block, key, buffer);
+    }
 
-            if(highblock >= keyBlocks) {
-                highblock = keyBlocks - 1;
-            }
+    LowHigh indexSearch(byte[] key) {
+        if(keyIndex==null) {
+            return new LowHigh(0, keyBlocks - 1);
         }
 
-        long block = binarySearch0(lowblock, highblock, key, buffer);
-        return scanBlock(block, key);
+        long lowblock,highblock;
+
+        // we have memory index, so narrow block range down
+        //            System.out.println("looking for "+new String(key));
+        //            for(byte[] b : keyIndex) {
+        //                System.out.println(new String(b));
+        //            }
+
+        int index = Collections.binarySearch(keyIndex,key,new Comparator<byte[]>() {
+            @Override
+            public int compare(byte[] o1, byte[] o2) {
+                return Arrays.compare(o1,o2);
+            }
+        });
+        if(index>=0) {
+            highblock = lowblock = index* keyIndexInterval;
+        } else {
+            index = (index*-1) - 1;
+            if(index == 0)  {
+                return null;
+            }
+            index--;
+
+            lowblock = index * keyIndexInterval;
+            highblock = lowblock + keyIndexInterval;
+        }
+
+        if(highblock >= keyBlocks) {
+            highblock = keyBlocks - 1;
+        }
+        return new LowHigh(lowblock,highblock);
     }
 
     private static int compareKeys(byte[] b,ByteBuffer bb){
@@ -259,13 +306,10 @@ next:
         return 0;
     }
 
-    long binarySearch0(long lowBlock,long highBlock,byte[] key,ByteBuffer buffer) throws IOException {
+    long binarySearch0(long lowBlock, long highBlock, byte[] key, ByteBuffer buffer) throws IOException {
         if(highBlock-lowBlock <= 1) {
             // the key is either in low block or high block, or does not exist, so check high block
-            buffer.clear();
-            keyFile.readAt(buffer, highBlock* keyBlockSize);
-            buffer.flip();
-
+            keyFile.readAt(buffer, highBlock* keyBlockSize, maxKeySize+2);
             if(compareKeys(key,buffer)<0) {
                 return lowBlock;
             } else {
@@ -273,51 +317,46 @@ next:
             }
         }
 
-        long block = (highBlock-lowBlock)/2 + lowBlock;
+        long block = (lowBlock+highBlock)/2;
 
-        buffer.clear();
-        keyFile.readAt(buffer, block*Constants.keyBlockSize);
-        buffer.flip();
+        keyFile.readAt(buffer, block*Constants.keyBlockSize, maxKeySize+2);
 
         if(compareKeys(key,buffer)<0) {
-            return binarySearch0(lowBlock, block, key, buffer);
+            return binarySearch0(lowBlock, block-1, key, buffer);
         } else {
             return binarySearch0(block, highBlock, key, buffer);
-        }
-    }
+        }   }
 
     static final ThreadLocal<ByteBuffer> bufferCache = new ThreadLocal<>(){
         @Override
         protected ByteBuffer initialValue() {
-            return ByteBuffer.allocateDirect(keyBlockSize);
+            return ByteBuffer.allocate(keyBlockSize);
         }
     };
-    OffsetLen scanBlock(long block,byte[] key) throws IOException {
-        ByteBuffer buffer = ByteBuffer.wrap(new byte[keyBlockSize]);
+    OffsetLen scanBlock(long block, byte[] key, ByteBuffer buffer) throws IOException {
+        keyFile.readAt(buffer, block*Constants.keyBlockSize,keyBlockSize);
 
-        buffer.clear();
-        keyFile.readAt(buffer, block*Constants.keyBlockSize);
-        buffer.flip();
+        KeyBuffer currKey = new KeyBuffer();
+        KeyBuffer prevKey = new KeyBuffer();
 
-        byte[] prevKey = null;
         for(;;) {
             int keylen = buffer.getShort() & 0xFFFF;
             if(keylen == endOfBlock) {
                 return null;
             }
-            byte[] _key = CompressedKey.decodeKey(keylen,prevKey,buffer);
-            prevKey = _key;
+            CompressedKey.decodeKey(currKey,prevKey,keylen,buffer);
 
-            long offset = buffer.getLong();
-            int len = buffer.getInt();
-
-            int result = Arrays.compare(_key,key);
+            int result = currKey.compare(key);
             if(result==0) {
+                long offset = buffer.getLong();
+                int len = buffer.getInt();
                 return new OffsetLen(offset,len);
             }
             if(result>0) {
                 return null;
             }
+            buffer.position(buffer.position()+12);
+            currKey.copyTo(prevKey);
         }
     }
 

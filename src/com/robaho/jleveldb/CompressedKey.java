@@ -3,15 +3,12 @@ package com.robaho.jleveldb;
 import java.nio.ByteBuffer;
 
 class CompressedKey {
-    static byte[] decodeKey(int keylen,byte[] prevKey,ByteBuffer buffer){
+    static void decodeKey(KeyBuffer dst,KeyBuffer prevKey,int keylen,ByteBuffer buffer){
         DecodedKeyLen dkyl= decodeKeyLen(keylen);
-        byte[] key = new byte[dkyl.compressedLen+dkyl.prefixLen];
-        buffer.get(key,0,dkyl.compressedLen);
+        dst.from(buffer,dkyl.compressedLen);
         if (dkyl.prefixLen != 0) {
-            System.arraycopy(key,0,key,dkyl.prefixLen,dkyl.compressedLen);
-            System.arraycopy(prevKey,0,key,0,dkyl.prefixLen);
+            dst.insertPrefix(prevKey,dkyl.prefixLen);
         }
-        return key;
     }
 
     private static class DecodedKeyLen {

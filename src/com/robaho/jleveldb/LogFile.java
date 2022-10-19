@@ -7,7 +7,6 @@ import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 class LogFile {
@@ -24,6 +23,10 @@ class LogFile {
         if(options.enableSyncWrite){
             file_options.add(StandardOpenOption.SYNC);
         }
+        if(!options.enableSyncWrite && options.disableWriteFlush) {
+            disableFlush = true;
+        }
+        
         w = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(filepath,file_options.toArray(new StandardOpenOption[file_options.size()]))));
     }
     public void startBatch(int len) throws IOException {

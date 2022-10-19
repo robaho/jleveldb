@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 
 final class UnsafeUtils {
@@ -37,13 +36,13 @@ final class UnsafeUtils {
 public class MemoryMappedFile {
     private final int MAX_MAP_SIZE = 1024*1024*1024; // 1GB
     private final long length;
-    private final MappedByteBuffer[] buffers;
+    private final ByteBuffer[] buffers;
     private boolean closed;
 
     public MemoryMappedFile(RandomAccessFile file) throws IOException {
         this.length = file.length();
         FileChannel ch = file.getChannel();
-        buffers = new MappedByteBuffer[(int)((length / MAX_MAP_SIZE)+1)];
+        buffers = new ByteBuffer[(int)((length / MAX_MAP_SIZE)+1)];
         long temp = length;
         for(int i=0;i< buffers.length;i++){
             buffers[i] = ch.map(FileChannel.MapMode.READ_ONLY,i* MAX_MAP_SIZE,Math.min(temp, MAX_MAP_SIZE));
@@ -54,24 +53,31 @@ public class MemoryMappedFile {
         return length;
     }
 
-    public void readAt(ByteBuffer bbuffer, long position) throws IOException {
+    /** read dst.capacity() of mapped file at position into the provided dst buffer at offset 0. dst is always cleared and flipped */
+    public void readAt(ByteBuffer dst, long position) throws IOException {
+        readAt(dst,position,dst.capacity());
+    }
+    /** read n bytes of mapped file at position into the provided dst buffer at offset 0. dst is always cleared and flipped */
+    public void readAt(ByteBuffer dst, long position, int n) throws IOException {
         if(closed)
             throw new IOException("memory mapped file is closed");
 
-       while(bbuffer.remaining()>0) {
-           MappedByteBuffer b = buffers[(int) (position / MAX_MAP_SIZE)];
-           byte[] buffer = bbuffer.array();
-           ByteBuffer b0 = b.duplicate();
-           b0.position((int) (position % MAX_MAP_SIZE));
-           int len = Math.min(bbuffer.remaining(), b0.remaining());
-           int offset = bbuffer.position();
-           b0.get(buffer, bbuffer.position(), len);
-           bbuffer.position(offset+len);
-       }
+        dst.clear();
+        while(n>0) {
+            ByteBuffer b = buffers[(int) (position / MAX_MAP_SIZE)];
+            int offset = (int) (position % MAX_MAP_SIZE);
+            b.limit(b.capacity());
+            b.position(offset);
+            int len = Math.min(n,b.capacity()-offset);
+            b.limit(offset+n);
+            dst.put(b);
+            n-=len;
+        }
+        dst.flip();
     }
 
     public void close() {
-        for(MappedByteBuffer buffer : buffers) {
+        for(ByteBuffer buffer : buffers) {
             UnsafeUtils.getUnsafe().invokeCleaner(buffer);
         }
         closed = true;

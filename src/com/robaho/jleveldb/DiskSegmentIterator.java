@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import static com.robaho.jleveldb.Constants.keyBlockSize;
+
 class DiskSegmentIterator implements LookupIterator{
     private boolean isValid = false;
     private boolean finished = false;
@@ -15,6 +17,9 @@ class DiskSegmentIterator implements LookupIterator{
     final ByteBuffer buffer;
 
     final byte[] lower,upper;
+
+    final KeyBuffer currKey=new KeyBuffer();
+    final KeyBuffer prevKey=new KeyBuffer();
 
     long block;
 
@@ -58,7 +63,7 @@ class DiskSegmentIterator implements LookupIterator{
         if(finished) {
             return true;
         }
-        var prevKey = key;
+        prevKey.fromBytes(key);
 
         while(true) {
             int keylen = buffer.getShort() & 0xFFFF;
@@ -71,28 +76,26 @@ class DiskSegmentIterator implements LookupIterator{
                     isValid = true;
                     return true;
                 }
-                buffer.clear();
-                segment.keyFile.readAt(buffer,block*Constants.keyBlockSize);
-                if(buffer.remaining()!=0)
+                segment.keyFile.readAt(buffer,block* keyBlockSize);
+                if(buffer.remaining()!=keyBlockSize)
                     throw new IOException("unable to read keyfile");
-                buffer.flip();
-                prevKey = null;
+                prevKey.clear();
                 continue;
             }
 
-            key = CompressedKey.decodeKey(keylen,prevKey,buffer);
-            prevKey = key;
+            CompressedKey.decodeKey(currKey,prevKey,keylen,buffer);
+            currKey.copyTo(prevKey);
 
             long dataoffset = buffer.getLong();
             int datalen = buffer.getInt();
 
             if(lower != null) {
-                if (Arrays.compare(key, lower)<0) {
+                if (currKey.compare(lower)<0) {
                     continue;
                 }
             }
             if(upper != null) {
-                if(Arrays.compare(key, upper)>0) {
+                if(currKey.compare(upper)>0) {
                     finished = true;
                     isValid = true;
                     key = null;
@@ -102,10 +105,11 @@ class DiskSegmentIterator implements LookupIterator{
             }
             found:
 
+            key = currKey.toBytes();
             data = new byte[datalen];
             ByteBuffer bb = ByteBuffer.wrap(data);
             segment.dataFile.readAt(bb,dataoffset);
-            if(bb.remaining()!=0)
+            if(bb.remaining()!=datalen)
                 throw new IOException("unable to read data file, expecting "+datalen+", read "+(bb.capacity()-bb.remaining()));
             isValid = true;
             return false;

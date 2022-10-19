@@ -41,7 +41,6 @@ public class LogSegment implements Segment {
     public void close() throws IOException {
     }
     public void removeSegment() throws IOException {
-        close();
         Files.delete(Path.of(filepath));
     }
 
@@ -49,9 +48,21 @@ public class LogSegment implements Segment {
         return MemorySegment.getLookupIterator(lower, upper, list);
     }
 
+    private static Removable createRemovable(final String path) {
+        return new Removable() {
+            @Override
+            public void remove() throws IOException {
+                Files.delete(Path.of(path));
+            }
+            public String toString() {
+                return "LogSegment:"+path;
+            }
+        };
+    }
+
     @Override
     public void removeOnFinalize() {
-        Deleter.removeOnFinalize(this);
+        Deleter.removeOnFinalize(this, createRemovable(filepath));
     }
 
     @Override

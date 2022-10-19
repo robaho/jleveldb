@@ -8,7 +8,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class DbDeleter implements Deleter{
+public class DbDeleter implements Deleter {
     private final String path;
     private OutputStream file;
     public DbDeleter(String path) {

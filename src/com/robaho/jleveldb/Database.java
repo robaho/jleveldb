@@ -21,11 +21,15 @@ class DatabaseState {
         this.multi = multi;
     }
 }
+interface Removable {
+    void remove() throws IOException;
+}
 interface Deleter {
-    private static Runnable removeSegmentAction(final Segment segment) {
+    private static Runnable removeSegmentAction(final Removable removable) {
         return () -> {
             try {
-                segment.removeSegment();
+//                System.out.println("removing "+removable+" via cleaner");
+                removable.remove();
             } catch(Exception e) {
                 // TODO notify this failed? database error callback?
             }
@@ -34,8 +38,8 @@ interface Deleter {
     static Cleaner cleaner = Cleaner.create();
     void scheduleDeletion(List<String> filesToDelete) throws IOException;
     void deleteScheduled() throws IOException;
-    static void removeOnFinalize(Segment s) {
-        cleaner.register(s,removeSegmentAction(s));
+    static void removeOnFinalize(Segment s,Removable r) {
+        cleaner.register(s,removeSegmentAction(r));
     }
     static Deleter newNullDeleter() {
         return new Deleter(){
@@ -100,7 +104,12 @@ public class Database {
     static Database openImpl(String path,Options options) throws DatabaseInvalid, DatabaseNotFound, DatabaseOpenFailed, DatabaseInUseException, DatabaseCorruptedException {
         checkValidDatabase(path);
 
-        String lockFilePath = path+"/lockfile";
+        String lockFilePath = null;
+        try {
+            lockFilePath = (new File(path).getCanonicalPath())+"/lockfile";
+        } catch (IOException e) {
+            throw new DatabaseOpenFailed(e);
+        }
         LockFile lockFile = null;
         try {
             lockFile = new LockFile(lockFilePath);
@@ -111,11 +120,7 @@ public class Database {
             throw new DatabaseInUseException();
 
         Database db = new Database();
-        try {
-            db.path = new File(path).getCanonicalPath();
-        } catch (IOException e) {
-            throw new DatabaseOpenFailed(e);
-        }
+        db.path = path;
         db.lockFile = lockFile;
         db.open = true;
         db.options = options;
@@ -211,7 +216,7 @@ public class Database {
     }
 
     public void close() throws DatabaseException, IOException {
-        System.out.println("closing, current segments "+stats().numberOfSegments+" to "+options.maxSegments);
+//        System.out.println("closing, current segments "+stats().numberOfSegments+" to "+options.maxSegments);
         closeWithMerge(options.maxSegments);
     }
 
@@ -286,7 +291,7 @@ public class Database {
         if(key.length==0 || key.length>1024)
             throw new IOException("invalid key length");
         byte[] value = getState().multi.get(key);
-        if(value!=null & value.length==0)
+        if(value!=null && value.length==0)
             return null;
         return value;
     }
