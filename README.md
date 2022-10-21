@@ -6,13 +6,15 @@ sequences are not supported
 user defined key comparisons do not work
 
 ```
-insert time 10000000 records = 15443ms, usec per op 1.5443
-close time 4954ms
-scan time 1934ms, usec per op 0.1934
-scan time 50% 81ms, usec per op 0.162
-random access time 6.264us per get
-close with merge 1 time 0ms
-scan time 2077ms, usec per op 0.2077
-scan time 50% 67ms, usec per op 0.134
-random access time 6.083us per get
+insert time 10000000 records = 42302ms, usec per op 4.2302
+close time 1770ms
+number of segments 7
+scan time 2331ms, usec per op 0.2331
+scan time 50% 144ms, usec per op 0.288
+random access time 6.476us per get
+close with merge 1 time 7123ms
+number of segments 1
+scan time 1146ms, usec per op 0.1146
+scan time 50% 62ms, usec per op 0.124
+random access time 5.774us per get
 ```
