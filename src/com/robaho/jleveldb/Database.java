@@ -327,6 +327,25 @@ public class Database {
             unlock();
         }
     }
+
+    /** creates a read-only snapshot of the database at a moment in time. */
+    public Snapshot snapshot() throws IOException {
+        lock();
+        try {
+            if (!open) {
+                throw new DatabaseClosedException();
+            }
+
+            var segments = Segment.copyAndAppend(state.segments,state.memory);
+            var memory = new MemorySegment(path,nextSegmentID(),options);
+            var multi = new MultiSegment(Segment.copyAndAppend(segments,memory));
+            state = new DatabaseState(segments, memory, multi);
+
+            return new Snapshot(this,new MultiSegment(segments));
+        } finally {
+            unlock();
+        }
+    }
     void maybeSwapMemory() {
         if(state.memory.getBytes() > options.maxMemoryBytes) {
             var segments = Segment.copyAndAppend(state.segments,state.memory);
