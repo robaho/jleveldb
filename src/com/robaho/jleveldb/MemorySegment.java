@@ -29,9 +29,7 @@ class MemorySegment implements Segment {
         return id;
     }
 
-    int getBytes() {
-        return bytes;
-    }
+    public long size() { return bytes; }
 
     private void maybeCreateLogFile() throws IOException {
         if(log!=null || path.equals(""))
@@ -67,6 +65,23 @@ class MemorySegment implements Segment {
         if(key==null)
             throw new IllegalArgumentException("null keys & values are not supported");
         return put(key,KeyValue.EMPTY);
+    }
+
+    public void write(WriteBatch batch) throws IOException {
+        maybeCreateLogFile();
+        if(log!=null) {
+            log.startBatch(batch.entries.size());
+        }
+        for(KeyValue kv : batch.entries) {
+            byte[] prev = list.put(kv.key,kv.value);
+            bytes+= (kv.key.length)+(kv.value.length) - ((prev!=null) ? kv.key.length+prev.length:0);
+            if(log!=null) {
+                log.write(kv.key,kv.value);
+            }
+        }
+        if(log!=null) {
+            log.endBatch(batch.entries.size());
+        }
     }
 
     @Override

@@ -13,12 +13,17 @@ public class LogSegment implements Segment {
     private long id;
     private String filepath;
     private Options options;
+    private final long size;
 
     public LogSegment(String filepath,Options options) throws IOException {
+        size = Files.size(Path.of(filepath));
         list = LogFile.readLogFile(filepath,options);
         id = Utils.getSegmentID(filepath);
         this.filepath = filepath;
         this.options = options;
+    }
+    public long size() {
+        return size;
     }
     public long lowerID() {
         return id;

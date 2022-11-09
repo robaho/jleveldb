@@ -30,6 +30,13 @@ class MultiSegment implements Segment {
         }
         return null;
     }
+    public long size() {
+        long size = 0;
+        for(Segment s : segmentList) {
+            size+=s.size();
+        }
+        return size;
+    }
 
     @Override
     public byte[] remove(byte[] key) throws IOException {

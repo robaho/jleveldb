@@ -24,6 +24,7 @@ class DiskSegment implements Segment {
     // nil for segments loaded during initial open
     // otherwise holds the key for every keyIndexInterval block
     final List<byte[]> keyIndex;
+    final long size;
 
     public DiskSegment(String keyFilename, String dataFilename, List<byte[]> keyIndex) throws IOException {
         this.keyfilename = keyFilename;
@@ -35,12 +36,21 @@ class DiskSegment implements Segment {
         this.upperID = Utils.getSegmentIDs(keyFilename)[1];
         this.keyBlocks = (keyFile.length()-1)/keyBlockSize + 1;
 
+        size = Files.size(Path.of(keyFilename))+Files.size(Path.of(dataFilename));
+
         if(keyIndex == null) {
             // TODO maybe load this in the background
             keyIndex = loadKeyIndex(keyFile, keyBlocks);
         }
         this.keyIndex = keyIndex;
+    }
 
+    public String toString() {
+        return "DiskSegment:"+keyfilename+","+datafilename;
+    }
+
+    public long size() {
+        return size;
     }
 
     static List<byte[]> loadKeyIndex(MemoryMappedFile keyFile,long keyBlocks) throws IOException {
@@ -166,18 +176,30 @@ next:
         Files.delete(Path.of(keyfilename));
         Files.delete(Path.of(datafilename));
     }
+    // EMPTY is an inner class so that a reference to the parent segment is retained for debugging
+    private final LookupIterator EMPTY = new LookupIterator() {
+        public KeyValue next() throws IOException {
+            return null;
+        }
+        public byte[] peekKey() throws IOException {
+            return null;
+        }
+        public String toString() {
+            return "EmptyIterator for "+DiskSegment.this;
+        }
+    };
 
     @Override
     public LookupIterator lookup(byte[] lower, byte[] upper) throws IOException {
-        if(keyFile.length()==0)
-            return LookupIterator.EMPTY;
+        if(size()==0)
+            return EMPTY;
 
         ByteBuffer buffer = ByteBuffer.allocateDirect(keyBlockSize).order(ByteOrder.BIG_ENDIAN);
         long block = 0;
         if(lower != null) {
             LowHigh lh = indexSearch(lower);
             if(lh==null)
-                return LookupIterator.EMPTY;
+                return EMPTY;
             long startBlock = binarySearch0(lh.low, lh.high, lower, buffer);
             if(startBlock<0)
                 return null;
@@ -274,11 +296,8 @@ next:
             highblock = lowblock = index* keyIndexInterval;
         } else {
             index = (index*-1) - 1;
-            if(index == 0)  {
-                return null;
-            }
             index--;
-
+            index = Math.max(0,index);
             lowblock = index * keyIndexInterval;
             highblock = lowblock + keyIndexInterval;
         }
@@ -325,7 +344,8 @@ next:
             return binarySearch0(lowBlock, block-1, key, buffer);
         } else {
             return binarySearch0(block, highBlock, key, buffer);
-        }   }
+        }
+    }
 
     static final ThreadLocal<ByteBuffer> bufferCache = new ThreadLocal<>(){
         @Override

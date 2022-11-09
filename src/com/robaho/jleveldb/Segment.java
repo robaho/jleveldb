@@ -22,4 +22,5 @@ interface Segment {
     void removeSegment() throws IOException;
     void removeOnFinalize();
     Collection<String> files();
+    long size();
 }

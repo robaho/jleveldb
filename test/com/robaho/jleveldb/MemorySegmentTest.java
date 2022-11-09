@@ -33,6 +33,34 @@ public class MemorySegmentTest extends TestCase {
     }
 
     public void testMemorySegment_UserKeyOrder() throws IOException {
+        var ms = MemorySegment.newMemoryOnlySegment();
+        ms.put("mykey0".getBytes(), "myvalue0".getBytes());
+        ms.put("mykey1".getBytes(), "myvalue1".getBytes());
+        ms.put("mykey2".getBytes(), "myvalue2".getBytes());
+        ms.put("mykey3".getBytes(), "myvalue3".getBytes());
+
+        var itr = ms.lookup(null,null);
+        int count=0;
+        for(;;count++) {
+            var kv = itr.next();
+            if(kv==null){
+                break;
+            }
+        }
+        assertEquals(4,count);
+
+        itr = ms.lookup("mykey1".getBytes(),null);
+        count=0;
+        for(;;count++) {
+            var kv = itr.next();
+            if(kv==null){
+                break;
+            }
+        }
+        assertEquals(3,count);
+    }
+
+    public void testMemorySegment_Lookup() throws IOException {
         Comparator<byte[]> c = (o1, o2) -> -1 * Arrays.compare(o1,o2);
         Options options = new Options();
         options.userKeyCompare=c;
@@ -47,4 +75,5 @@ public class MemorySegmentTest extends TestCase {
         if(Arrays.compare(kv.value,"myvalue2".getBytes())!=0)
             fail();
     }
+
 }

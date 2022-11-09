@@ -44,6 +44,9 @@ class DiskSegmentIterator implements LookupIterator{
 
     @Override
     public KeyValue next() throws IOException {
+        if(finished) {
+            return null;
+        }
         if(isValid) {
             isValid = false;
             return new KeyValue(key,data);

@@ -13,10 +13,13 @@ import java.util.concurrent.locks.LockSupport;
 import static com.robaho.jleveldb.DiskIO.writeAndLoadSegment;
 
 class Merger {
+    static Thread mergerThread;
     static void backgroundMerge(Database db) {
+        mergerThread = Thread.currentThread();
+
         for(;;) {
             db.lock();
-            if(db.closing || db.error != null) {
+            if(!db.open || db.error != null) {
                 db.unlock();
                 return;
             }
@@ -39,6 +42,10 @@ class Merger {
         }
     }
 
+    static void wakeupMerger() {
+        LockSupport.unpark(mergerThread);
+    }
+
     static void mergeSegments0(Database db, int segmentCount) throws IOException {
         if(!db.inMerge.compareAndSet(false,true))
             return;
@@ -52,14 +59,29 @@ class Merger {
     static void mergeDiskSegments0Exclusive(Database db,int segmentCount) throws IOException {
         // must hold the inMerge lock, only a single routine can be here
 
-        int index = 0;
-
         while(true) {
             List<Segment> segments = db.state.segments;
 
             if (segments.size() <= segmentCount) {
                 return;
             }
+
+//            System.out.println("======= "+segments.size()+" segments");
+//            for(Segment s : segments) {
+//                System.out.println(""+s.lowerID()+","+s.upperID()+" = "+(s.size()/(1024*1024))+"M");
+//            }
+
+            int smallest = 0;
+            for(int i=1;i<segments.size();i++) {
+                if(segments.get(i).size() < segments.get(smallest).size()) {
+                    smallest=i;
+                }
+            }
+            if(smallest>0 && smallest==segments.size()-1) {
+                smallest--;
+            }
+
+            int index = smallest;
 
             int maxMergeSize = segments.size() / 2;
             if (maxMergeSize < 4) {
@@ -76,16 +98,9 @@ class Merger {
                     break;
             }
 
-            if (mergable.size() < 2) {
-                if (index == 0)
-                    return;
-                index = 0;
-                continue;
-            }
-
             segments = segments.subList(index, index + mergable.size());
 
-            Segment newseg = mergeSegments1(db.deleter, db.path, segments, index==0);
+            Segment newSegment = mergeSegments1(db.deleter, db.path, segments, index==0);
             db.lock();
             try {
                 segments = db.state.segments;
@@ -97,18 +112,14 @@ class Merger {
                 for (Segment s : mergable) {
                     s.removeOnFinalize();
                 }
-                var newsegments = new ArrayList<Segment>();
-                newsegments.addAll(segments.subList(0, index));
-                newsegments.add(newseg);
-                newsegments.addAll(segments.subList(index + mergable.size(), segments.size()));
-                db.state = new DatabaseState(newsegments, db.state.memory, new MultiSegment(Segment.copyAndAppend(newsegments, db.state.memory)));
-                index++;
+                var newSegments = new ArrayList<Segment>();
+                newSegments.addAll(segments.subList(0, index));
+                newSegments.add(newSegment);
+                newSegments.addAll(segments.subList(index + mergable.size(), segments.size()));
+                db.state = new DatabaseState(newSegments, db.state.memory, new MultiSegment(Segment.copyAndAppend(newSegments, db.state.memory)));
             } finally {
                 db.unlock();
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException ignored) {
-                }
+                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
             }
         }
     }

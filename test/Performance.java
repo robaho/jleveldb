@@ -66,23 +66,29 @@ public class Performance {
         System.out.println("scan time "+ duration+ "ms, usec per op "+ (duration*1000.0)/nr);
 
         start = System.currentTimeMillis();
-        itr = db.lookup("mykey 300000".getBytes(),"mykey 799999".getBytes());
+        itr = db.lookup("mykey5000000".getBytes(),"mykey5099999".getBytes());
         count = 0;
+
+        KeyValue kv;
+        KeyValue last=null;
+
         while(true) {
-            if(itr.next()==null)
+            kv=itr.next();
+            if(kv==null)
                 break;
+            last=kv;
             count++;
-            if(count>500000+1000) {
+            if(count>nr/100+1000) {
                 throw new IllegalStateException("incorrect count, finding too many records. aborting...");
             }
         }
-        if(count != 500000) {
-            throw new IllegalStateException("incorrect count != 500000, count is "+ count);
+        if(count != nr/100) {
+            throw new IllegalStateException("incorrect count, count is "+ count+", last key = "+new String(last.key));
         }
         end = System.currentTimeMillis();
         duration = end-start;
 
-        System.out.println("scan time 50% "+duration+"ms, usec per op "+ (duration*1000.0)/500000);
+        System.out.println("scan time 1% "+duration+"ms, usec per op "+ (duration*1000.0)/(nr/100));
 
         start = System.currentTimeMillis();
 

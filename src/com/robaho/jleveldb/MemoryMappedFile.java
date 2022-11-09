@@ -69,7 +69,7 @@ public class MemoryMappedFile {
             b.limit(b.capacity());
             b.position(offset);
             int len = Math.min(n,b.capacity()-offset);
-            b.limit(offset+n);
+            b.limit(offset+len);
             dst.put(b);
             n-=len;
         }

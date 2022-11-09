@@ -15,15 +15,5 @@ public interface LookupIterator extends LookupIteratorInternal {
      * @throws IOException
      */
     KeyValue next() throws IOException;
-    static LookupIterator EMPTY = new LookupIterator() {
-        @Override
-        public KeyValue next() throws IOException {
-            return null;
-        }
-        @Override
-        public byte[] peekKey() throws IOException {
-            return null;
-        }
-    };
 }
 

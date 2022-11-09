@@ -4,6 +4,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -19,7 +20,7 @@ class LogFile {
 
     LogFile(String path,long id,Options options) throws IOException {
         filepath = Path.of(path+"/log."+id);
-        List<StandardOpenOption> file_options = Arrays.asList(StandardOpenOption.TRUNCATE_EXISTING,StandardOpenOption.WRITE,StandardOpenOption.CREATE);
+        List<StandardOpenOption> file_options = new ArrayList<>(Arrays.asList(StandardOpenOption.TRUNCATE_EXISTING,StandardOpenOption.WRITE,StandardOpenOption.CREATE));
         if(options.enableSyncWrite){
             file_options.add(StandardOpenOption.SYNC);
         }

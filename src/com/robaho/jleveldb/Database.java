@@ -3,6 +3,7 @@ package com.robaho.jleveldb;
 import java.io.File;
 import java.io.IOException;
 import java.lang.ref.Cleaner;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.*;
@@ -31,7 +32,8 @@ interface Deleter {
 //                System.out.println("removing "+removable+" via cleaner");
                 removable.remove();
             } catch(Exception e) {
-                // TODO notify this failed? database error callback?
+                // TODO notify this failed? database async error callback? might not be able to be
+                // removed if file is in use - i.e. being copied during backup by external program
             }
         };
     }
@@ -40,16 +42,6 @@ interface Deleter {
     void deleteScheduled() throws IOException;
     static void removeOnFinalize(Segment s,Removable r) {
         cleaner.register(s,removeSegmentAction(r));
-    }
-    static Deleter newNullDeleter() {
-        return new Deleter(){
-            @Override
-            public void scheduleDeletion(List<String> filesToDelete) throws IOException {
-            }
-            @Override
-            public void deleteScheduled() throws IOException {
-            }
-        };
     }
 }
 
@@ -68,8 +60,7 @@ public class Database {
         }
     });
 
-    boolean open;
-    volatile boolean closing;
+    volatile boolean open;
     final AtomicBoolean inMerge = new AtomicBoolean(false);
     Deleter deleter;
     String path;
@@ -228,7 +219,7 @@ public class Database {
                     throw new DatabaseException("already closed");
                 }
 
-                closing = true;
+                open = false;
 
                 unlock();
 
@@ -236,7 +227,7 @@ public class Database {
 
                 // at this point the background merger should not be running
 
-                state =new DatabaseState(Segment.copyAndAppend(state.segments,state.memory),null,null);
+                state=new DatabaseState(Segment.copyAndAppend(state.segments,state.memory),null,null);
 
                 if (numberOfSegments > 0) {
                     Merger.mergeSegments0(this, numberOfSegments);
@@ -269,10 +260,9 @@ public class Database {
                 deleter.deleteScheduled();
 
             } finally {
-                open=false;
                 state = new DatabaseState(Collections.EMPTY_LIST,null,null);
-                lockFile.unlock();
                 unlock();
+                lockFile.unlock();
             }
         }
     }
@@ -328,6 +318,20 @@ public class Database {
         }
     }
 
+    public void write(WriteBatch batch) throws IOException {
+        lock();
+        try {
+            if(!open) {
+                throw new DatabaseClosedException();
+            }
+            maybeSwapMemory();
+            state.memory.write(batch);
+        } finally {
+            unlock();
+            maybeMerge();
+        }
+    }
+
     /** creates a read-only snapshot of the database at a moment in time. */
     public Snapshot snapshot() throws IOException {
         lock();
@@ -335,19 +339,24 @@ public class Database {
             if (!open) {
                 throw new DatabaseClosedException();
             }
+            if(state.memory.size()==0) {
+                // memory is unmodified so only the non-memory segments are needed
+                var segments = new ArrayList(state.segments);
+                return new Snapshot(this,new MultiSegment(segments));
+            } else {
+                var segments = Segment.copyAndAppend(state.segments,state.memory);
+                var memory = new MemorySegment(path,nextSegmentID(),options);
+                var multi = new MultiSegment(Segment.copyAndAppend(segments,memory));
+                state = new DatabaseState(segments, memory, multi);
 
-            var segments = Segment.copyAndAppend(state.segments,state.memory);
-            var memory = new MemorySegment(path,nextSegmentID(),options);
-            var multi = new MultiSegment(Segment.copyAndAppend(segments,memory));
-            state = new DatabaseState(segments, memory, multi);
-
-            return new Snapshot(this,new MultiSegment(segments));
+                return new Snapshot(this,new MultiSegment(segments));
+            }
         } finally {
             unlock();
         }
     }
     void maybeSwapMemory() {
-        if(state.memory.getBytes() > options.maxMemoryBytes) {
+        if(state.memory.size() > options.maxMemoryBytes) {
             var segments = Segment.copyAndAppend(state.segments,state.memory);
             var memory = new MemorySegment(path,nextSegmentID(),options);
             var multi = new MultiSegment(Segment.copyAndAppend(segments,memory));
@@ -360,14 +369,19 @@ public class Database {
         }
         var state0 = state;
         if(state0.segments.size() > 2*options.maxSegments) {
-            Merger.mergeSegments0(this,options.maxSegments);
+            Merger.wakeupMerger();
+//            Merger.mergeSegments0(this,options.maxSegments);
+//            state0 = state;
+//            if(state0.segments.size() > 2*options.maxSegments) {
+//                LockSupport.parkNanos(TimeUnit.MICROSECONDS.toNanos(100));
+//            }
+//            // throttle writing to allow background merger to run
         }
     }
     public LookupIterator lookup(byte[] lower,byte[] upper) throws IOException {
         if(!open)
             throw new DatabaseClosedException();
-        LookupIterator itr = state.multi.lookup(lower, upper);
-        return new DatabaseLookup(itr);
+        return snapshot().lookup(lower,upper);
     }
 
     void lock() {
