@@ -11,7 +11,7 @@ public class SnapshotTest extends TestCase {
             Database.remove("testdb/mydb");
         } catch(DatabaseException ignore){}
 
-        var db = Database.open("test/mydb", new Options(true));
+        var db = Database.open("testdb/mydb", new Options(true));
 
         db.put("mykey".getBytes(), "myvalue".getBytes());
 
