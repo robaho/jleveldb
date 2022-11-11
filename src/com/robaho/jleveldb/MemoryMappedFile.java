@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 
 final class UnsafeUtils {
@@ -45,7 +46,7 @@ public class MemoryMappedFile {
         buffers = new ByteBuffer[(int)((length / MAX_MAP_SIZE)+1)];
         long temp = length;
         for(int i=0;i< buffers.length;i++){
-            buffers[i] = ch.map(FileChannel.MapMode.READ_ONLY,i* MAX_MAP_SIZE,Math.min(temp, MAX_MAP_SIZE));
+            buffers[i] = ch.map(FileChannel.MapMode.READ_ONLY,i* MAX_MAP_SIZE,Math.min(temp, MAX_MAP_SIZE)).order(ByteOrder.LITTLE_ENDIAN);
             temp -= MAX_MAP_SIZE;
         }
     }
@@ -66,9 +67,9 @@ public class MemoryMappedFile {
         while(n>0) {
             ByteBuffer b = buffers[(int) (position / MAX_MAP_SIZE)];
             int offset = (int) (position % MAX_MAP_SIZE);
-            b.limit(b.capacity());
+            b.clear();
             b.position(offset);
-            int len = Math.min(n,b.capacity()-offset);
+            int len = Math.min(n,b.remaining());
             b.limit(offset+len);
             dst.put(b);
             n-=len;

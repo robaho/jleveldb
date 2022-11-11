@@ -58,7 +58,7 @@ class DiskSegment implements Segment {
             return Collections.emptyList();
         }
 
-        ByteBuffer bb = ByteBuffer.allocateDirect(keyBlockSize).order(ByteOrder.BIG_ENDIAN);
+        ByteBuffer bb = ByteBuffer.allocateDirect(keyBlockSize).order(ByteOrder.LITTLE_ENDIAN);
         List<byte[]> keyIndex = new ArrayList<byte[]>();
         long block;
 
@@ -156,7 +156,7 @@ next:
             return null;
 
         byte[] buffer = new byte[ol.len];
-        dataFile.readAt(ByteBuffer.wrap(buffer).order(ByteOrder.BIG_ENDIAN),ol.offset);
+        dataFile.readAt(ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN),ol.offset);
         return buffer;
     }
 
@@ -194,7 +194,7 @@ next:
         if(size()==0)
             return EMPTY;
 
-        ByteBuffer buffer = ByteBuffer.allocateDirect(keyBlockSize).order(ByteOrder.BIG_ENDIAN);
+        ByteBuffer buffer = ByteBuffer.allocateDirect(keyBlockSize).order(ByteOrder.LITTLE_ENDIAN);
         long block = 0;
         if(lower != null) {
             LowHigh lh = indexSearch(lower);
@@ -350,7 +350,7 @@ next:
     static final ThreadLocal<ByteBuffer> bufferCache = new ThreadLocal<>(){
         @Override
         protected ByteBuffer initialValue() {
-            return ByteBuffer.allocate(keyBlockSize);
+            return ByteBuffer.allocateDirect(keyBlockSize).order(ByteOrder.LITTLE_ENDIAN);
         }
     };
     OffsetLen scanBlock(long block, byte[] key, ByteBuffer buffer) throws IOException {

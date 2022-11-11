@@ -4,9 +4,9 @@ import java.nio.ByteBuffer;
 
 class CompressedKey {
     static void decodeKey(KeyBuffer dst,KeyBuffer prevKey,int keylen,ByteBuffer buffer){
-        DecodedKeyLen dkyl= decodeKeyLen(keylen);
-        dst.from(buffer,dkyl.compressedLen);
-        if (dkyl.prefixLen != 0) {
+        DecodedKeyLen dkyl = decodeKeyLen(keylen);
+        dst.from(buffer,dkyl==null ? keylen : dkyl.compressedLen);
+        if (dkyl!=null) {
             dst.insertPrefix(prevKey,dkyl.prefixLen);
         }
     }
@@ -32,7 +32,7 @@ class CompressedKey {
             if (keylen <= 0) {
                 throw new IllegalStateException("key <= 0");
             }
-            return new DecodedKeyLen(0,keylen);
+            return null;
         }
     }
 }

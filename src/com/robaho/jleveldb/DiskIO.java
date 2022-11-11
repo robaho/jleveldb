@@ -44,8 +44,8 @@ class DiskIO {
     }
 
     static List<byte[]> writeSegmentFiles(File keyFile, File dataFile,LookupIterator itr,boolean removeDeleted) throws IOException {
-        var keyW = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(keyFile)));
-        var dataW = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(dataFile)));
+        var keyW = new LittleEndianDataOutputStream(new BufferedOutputStream(new FileOutputStream(keyFile)));
+        var dataW = new LittleEndianDataOutputStream(new BufferedOutputStream(new FileOutputStream(dataFile)));
 
         long dataOffset=0;
         int keyBlockLen=0;
