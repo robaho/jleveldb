@@ -20,7 +20,7 @@ public class Snapshot {
         return value;
     }
     public LookupIterator lookup(byte[] lower,byte[] higher) throws IOException {
-        return multi.lookup(lower,higher);
+        return db.newDatabaseLookup(multi.lookup(lower,higher));
     }
 }
 

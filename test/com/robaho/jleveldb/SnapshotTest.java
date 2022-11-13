@@ -1,5 +1,6 @@
 package com.robaho.jleveldb;
 
+import com.robaho.jleveldb.exceptions.DatabaseException;
 import junit.framework.TestCase;
 
 import java.io.IOException;

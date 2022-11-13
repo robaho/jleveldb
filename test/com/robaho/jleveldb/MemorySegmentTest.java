@@ -16,6 +16,15 @@ public class MemorySegmentTest extends TestCase {
             fail();
         }
     }
+    public void testMemorySegment_PutOverwrite() throws IOException {
+        var ms = MemorySegment.newMemoryOnlySegment();
+        ms.put("mykey".getBytes(), "myvalue".getBytes());
+        ms.put("mykey".getBytes(), "myvalue2".getBytes());
+        var val = ms.get("mykey".getBytes());
+        if(Arrays.compare(val, "myvalue2".getBytes())!=0) {
+            fail();
+        }
+    }
 
     public void testMemorySegment_Remove() throws IOException {
         var ms = MemorySegment.newMemoryOnlySegment();

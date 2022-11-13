@@ -1,10 +1,9 @@
 import com.robaho.jleveldb.Database;
-import com.robaho.jleveldb.DatabaseException;
+import com.robaho.jleveldb.exceptions.DatabaseException;
 import com.robaho.jleveldb.LookupIterator;
 import com.robaho.jleveldb.Options;
 
 import java.io.IOException;
-import java.util.Random;
 
 public class PerformanceRead {
     static final int nr = 10000000;

@@ -46,7 +46,11 @@ class DiskSegment implements Segment {
     }
 
     public String toString() {
-        return "DiskSegment:"+keyfilename+","+datafilename;
+        String keyRange="";
+        if(keyIndex!=null && keyIndex.size()>0) {
+            keyRange = new String(keyIndex.get(0)) + "<>"+(new String(keyIndex.get(keyIndex.size()-1)));
+        }
+        return "DiskSegment:"+keyfilename+","+datafilename+":"+keyRange;
     }
 
     public long size() {

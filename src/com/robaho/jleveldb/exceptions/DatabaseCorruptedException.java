@@ -1,4 +1,4 @@
-package com.robaho.jleveldb;
+package com.robaho.jleveldb.exceptions;
 
 import java.io.IOException;
 

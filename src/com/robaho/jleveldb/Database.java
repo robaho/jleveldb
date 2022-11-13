@@ -1,5 +1,7 @@
 package com.robaho.jleveldb;
 
+import com.robaho.jleveldb.exceptions.*;
+
 import java.io.File;
 import java.io.IOException;
 import java.lang.ref.Cleaner;
@@ -197,7 +199,7 @@ public class Database {
             try {
                 lockFile = new LockFile(lockFilePath);
             } catch (IOException e) {
-                throw new DatabaseException(e);
+                throw new DatabaseAsyncException(e);
             }
             if(!lockFile.tryLock())
                 throw new DatabaseInUseException();
@@ -242,7 +244,7 @@ public class Database {
                             @Override
                             public void run() {
                                 try {
-                                    DiskIO.writeSegmentToDisk(Database.this, ms);
+                                    DiskIO.writeSegmentToDisk(Database.this.path, ms);
                                 } catch(Exception e) {
                                     error = e;
                                 }
@@ -258,6 +260,10 @@ public class Database {
                 }
 
                 deleter.deleteScheduled();
+
+                if(error!=null) {
+                    throw new DatabaseAsyncException(error);
+                }
 
             } finally {
                 state = new DatabaseState(Collections.EMPTY_LIST,null,null);
@@ -425,6 +431,10 @@ public class Database {
                 return kv;
             }
         }
+    }
+
+    LookupIterator newDatabaseLookup(LookupIterator itr) {
+        return new DatabaseLookup(itr);
     }
 }
 

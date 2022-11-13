@@ -5,23 +5,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 class DiskIO {
-    // called to write a memory segment to disk
-    static void writeSegmentToDisk(Database db,MemorySegment seg) throws IOException {
+    // called to write a memory segment to disk. If the segment is empty, null is returned.
+    static DiskSegment writeSegmentToDisk(String dbPath,MemorySegment seg) throws IOException {
         var itr = seg.lookup(null,null);
 
         if (itr.peekKey()==null) {
             seg.removeSegment();
-            return;
+            return null;
         }
 
         var lowerId = seg.lowerID();
         var upperId = seg.upperID();
 
-        var keyFilename = String.format("%s/keys.%ld.%ld",db.path,lowerId,upperId);
-        var dataFilename = String.format("%s/data.%ld.%ld",db.path,lowerId,upperId);
+        var keyFilename = String.format("%s/keys.%d.%d",dbPath,lowerId,upperId);
+        var dataFilename = String.format("%s/data.%d.%d",dbPath,lowerId,upperId);
 
-        writeAndLoadSegment(keyFilename, dataFilename, itr, false);
+        DiskSegment ds = writeAndLoadSegment(keyFilename, dataFilename, itr, false);
         seg.removeSegment();
+        return ds;
     }
 
     static DiskSegment writeAndLoadSegment(String keyFilename, String dataFilename,LookupIterator itr,boolean removeDeleted) throws IOException {

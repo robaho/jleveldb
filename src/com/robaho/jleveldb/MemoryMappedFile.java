@@ -67,10 +67,11 @@ public class MemoryMappedFile {
         while(n>0) {
             ByteBuffer b = buffers[(int) (position / MAX_MAP_SIZE)];
             int offset = (int) (position % MAX_MAP_SIZE);
+            b = b.slice(); // need a slice since concurrent reads will reposition buffer
             b.clear();
-            b.position(offset);
-            int len = Math.min(n,b.remaining());
+            int len = Math.min(n,b.capacity()-offset);
             b.limit(offset+len);
+            b.position(offset);
             dst.put(b);
             n-=len;
         }

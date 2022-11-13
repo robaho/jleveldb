@@ -1,11 +1,11 @@
 import com.robaho.jleveldb.Database;
-import com.robaho.jleveldb.DatabaseException;
-import com.robaho.jleveldb.LookupIterator;
+import com.robaho.jleveldb.exceptions.DatabaseException;
 import com.robaho.jleveldb.Options;
 
 import java.io.IOException;
 import java.util.Random;
 
+/** designed to be run after Performance. This standalone test is used with the profiler to optimize random reads.*/
 public class PerformanceRandomRead {
     static final int nr = 10000000;
 

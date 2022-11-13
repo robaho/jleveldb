@@ -1,4 +1,5 @@
 import com.robaho.jleveldb.*;
+import com.robaho.jleveldb.exceptions.DatabaseException;
 
 import java.io.IOException;
 import java.util.Random;
