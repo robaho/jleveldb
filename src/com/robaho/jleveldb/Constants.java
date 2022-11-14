@@ -7,6 +7,6 @@ class Constants {
     static final int compressedBit = 0x8000;
     static final int maxPrefixLen = 0xFF ^ 0x80;
     static final int maxCompressedLen = 0xFF;
-    static final int keyIndexInterval = 16*16;
+    static final int keyIndexInterval = 16;
     static final int maxSegments = 8;
 }
