@@ -1,21 +1,16 @@
 package com.robaho.jleveldb;
 
-import java.nio.ByteBuffer;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Arrays;
 
+/** used to efficiently handle prefix key compression */
 final class KeyBuffer {
     final byte[] buffer = new byte[1024];
     int len=0;
     int offset=1024;
 
-    public KeyBuffer(byte[] key) {
-        if(key==null)
-            return;
-        offset = 1024-key.length;
-        len = key.length;
-        System.arraycopy(key,0,buffer,offset,len);
-    }
-    public KeyBuffer(){}
+    KeyBuffer(){}
 
     void copyTo(KeyBuffer dst) {
         dst.len=len;
@@ -25,12 +20,9 @@ final class KeyBuffer {
     int compare(byte[] bytes) {
         return Arrays.compare(buffer,offset,offset+len,bytes,0,bytes.length);
     }
-    int compare(KeyBuffer to) {
-        return Arrays.compare(buffer,offset,offset+len,to.buffer,to.offset, to.offset+to.len);
-    }
-    public void from(ByteBuffer src, int len) {
+    public void from(InputStream src, int len) throws IOException {
         offset=1024-len;
-        src.get(buffer,offset,len);
+        src.read(buffer,offset,len);
         this.len=len;
     }
     public void insertPrefix(KeyBuffer prefixKey, int prefixLen) {

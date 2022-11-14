@@ -1,13 +1,18 @@
 package com.robaho.jleveldb;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 class CompressedKey {
-    static void decodeKey(KeyBuffer dst,KeyBuffer prevKey,int keylen,ByteBuffer buffer){
-        DecodedKeyLen dkyl = decodeKeyLen(keylen);
-        dst.from(buffer,dkyl==null ? keylen : dkyl.compressedLen);
-        if (dkyl!=null) {
-            dst.insertPrefix(prevKey,dkyl.prefixLen);
+    static void decodeKey(KeyBuffer dst, KeyBuffer prevKey, int keylen, InputStream is) throws IOException {
+        if((keylen & Constants.compressedBit)!=0) {
+            int prefixLen = ((keylen >> 8) & 0xFFFF & Constants.maxPrefixLen);
+            int compressedLen = (keylen & Constants.maxCompressedLen);
+            dst.from(is,compressedLen);
+            dst.insertPrefix(prevKey,prefixLen);
+        } else {
+            dst.from(is,keylen);
         }
     }
 

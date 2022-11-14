@@ -39,10 +39,11 @@ public class MemoryMappedFile {
     private final long length;
     private final ByteBuffer[] buffers;
     private boolean closed;
+    private final FileChannel ch;
 
     public MemoryMappedFile(RandomAccessFile file) throws IOException {
         this.length = file.length();
-        FileChannel ch = file.getChannel();
+        ch = file.getChannel();
         buffers = new ByteBuffer[(int)((length / MAX_MAP_SIZE)+1)];
         long temp = length;
         for(int i=0;i< buffers.length;i++){
@@ -55,33 +56,31 @@ public class MemoryMappedFile {
     }
 
     /** read dst.capacity() of mapped file at position into the provided dst buffer at offset 0. dst is always cleared and flipped */
-    public void readAt(ByteBuffer dst, long position) throws IOException {
-        readAt(dst,position,dst.capacity());
+    public void readAt(byte[] dst, long position) throws IOException {
+        readAt(dst,position,dst.length);
     }
     /** read n bytes of mapped file at position into the provided dst buffer at offset 0. dst is always cleared and flipped */
-    public void readAt(ByteBuffer dst, long position, int n) throws IOException {
+    public int readAt(byte[] dst, long position, int n) throws IOException {
         if(closed)
             throw new IOException("memory mapped file is closed");
 
-        dst.clear();
+        int count=0;
         while(n>0) {
             ByteBuffer b = buffers[(int) (position / MAX_MAP_SIZE)];
             int offset = (int) (position % MAX_MAP_SIZE);
-            b = b.slice(); // need a slice since concurrent reads will reposition buffer
-            b.clear();
             int len = Math.min(n,b.capacity()-offset);
-            b.limit(offset+len);
-            b.position(offset);
-            dst.put(b);
+            b.get(offset,dst,count,len);
             n-=len;
+            count+=len;
         }
-        dst.flip();
+        return count;
     }
 
-    public void close() {
+    public void close() throws IOException {
         for(ByteBuffer buffer : buffers) {
             UnsafeUtils.getUnsafe().invokeCleaner(buffer);
         }
+        ch.close();
         closed = true;
     }
 }

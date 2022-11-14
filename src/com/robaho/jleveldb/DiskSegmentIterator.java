@@ -1,5 +1,6 @@
 package com.robaho.jleveldb;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -14,7 +15,7 @@ class DiskSegmentIterator implements LookupIterator{
     byte[] data;
 
     final DiskSegment segment;
-    final ByteBuffer buffer;
+    final byte[] buffer;
 
     final byte[] lower,upper;
 
@@ -23,12 +24,15 @@ class DiskSegmentIterator implements LookupIterator{
 
     long block;
 
-    DiskSegmentIterator(DiskSegment segment,byte[] lower,byte[] upper,ByteBuffer buffer,long block){
+    LittleEndianDataInputStream is;
+
+    DiskSegmentIterator(DiskSegment segment,byte[] lower,byte[] upper,byte[] buffer,long block){
         this.segment = segment;
         this.lower = lower;
         this.upper = upper;
         this.buffer = buffer;
         this.block = block;
+        is = new LittleEndianDataInputStream(buffer);
     }
 
     @Override
@@ -69,7 +73,7 @@ class DiskSegmentIterator implements LookupIterator{
         prevKey.fromBytes(key);
 
         while(true) {
-            int keylen = buffer.getShort() & 0xFFFF;
+            int keylen = is.readShort() & 0xFFFF;
             if(keylen == Constants.endOfBlock) {
                 block++;
                 if (block == segment.keyBlocks) {
@@ -79,18 +83,19 @@ class DiskSegmentIterator implements LookupIterator{
                     isValid = true;
                     return true;
                 }
-                segment.keyFile.readAt(buffer,block* keyBlockSize);
-                if(buffer.remaining()!=keyBlockSize)
+                int len = segment.keyFile.readAt(buffer,block* keyBlockSize, keyBlockSize);
+                is = new LittleEndianDataInputStream(buffer,0,len);
+                if(is.available()!=keyBlockSize)
                     throw new IOException("unable to read keyfile");
                 prevKey.clear();
                 continue;
             }
 
-            CompressedKey.decodeKey(currKey,prevKey,keylen,buffer);
+            CompressedKey.decodeKey(currKey,prevKey,keylen,is);
             currKey.copyTo(prevKey);
 
-            long dataoffset = buffer.getLong();
-            int datalen = buffer.getInt();
+            long dataoffset = is.readLong();
+            int datalen = is.readInt();
 
             if(lower != null) {
                 if (currKey.compare(lower)<0) {
@@ -110,10 +115,10 @@ class DiskSegmentIterator implements LookupIterator{
 
             key = currKey.toBytes();
             data = new byte[datalen];
-            ByteBuffer bb = ByteBuffer.wrap(data);
-            segment.dataFile.readAt(bb,dataoffset);
-            if(bb.remaining()!=datalen)
-                throw new IOException("unable to read data file, expecting "+datalen+", read "+(bb.capacity()-bb.remaining()));
+            int result = segment.dataFile.readAt(data,dataoffset,datalen);
+            if(result!=datalen) {
+                throw new IOException("unable to read data file, expecting " + datalen + ", read " + result);
+            }
             isValid = true;
             return false;
         }

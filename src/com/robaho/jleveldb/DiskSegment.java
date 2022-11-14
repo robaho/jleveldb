@@ -1,5 +1,6 @@
 package com.robaho.jleveldb;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -62,18 +63,19 @@ class DiskSegment implements Segment {
             return Collections.emptyList();
         }
 
-        ByteBuffer bb = ByteBuffer.allocateDirect(keyBlockSize).order(ByteOrder.LITTLE_ENDIAN);
+        byte[] buffer = new byte[keyBlockSize];
         List<byte[]> keyIndex = new ArrayList<byte[]>();
         long block;
 
         for(block = 0; block < keyBlocks; block += keyIndexInterval) {
-            keyFile.readAt(bb,block*keyBlockSize,maxKeySize+2); // read start key in block
-            int keylen = bb.getShort() & 0xFFFF;
+            keyFile.readAt(buffer,block*keyBlockSize,maxKeySize+2); // read start key in block
+            LittleEndianDataInputStream is = new LittleEndianDataInputStream(buffer);
+            int keylen = is.readShort() & 0xFFFF;
             if(keylen == endOfBlock) {
                 break;
             }
             byte[] keycopy = new byte[keylen];
-            bb.get(keycopy);
+            is.readFully(keycopy,0,keylen);
             keyIndex.add(keycopy);
         }
         return keyIndex;
@@ -160,7 +162,7 @@ next:
             return null;
 
         byte[] buffer = new byte[ol.len];
-        dataFile.readAt(ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN),ol.offset);
+        dataFile.readAt(buffer,ol.offset);
         return buffer;
     }
 
@@ -198,19 +200,19 @@ next:
         if(size()==0)
             return EMPTY;
 
-        ByteBuffer buffer = ByteBuffer.allocateDirect(keyBlockSize).order(ByteOrder.LITTLE_ENDIAN);
+        ScanContext ctx = new ScanContext();
         long block = 0;
         if(lower != null) {
             LowHigh lh = indexSearch(lower);
             if(lh==null)
                 return EMPTY;
-            long startBlock = binarySearch0(lh.low, lh.high, lower, buffer);
+            long startBlock = binarySearch0(lh.low, lh.high, lower, ctx);
             if(startBlock<0)
                 return null;
             block = startBlock;
         }
-        keyFile.readAt(buffer,block* keyBlockSize);
-        return new DiskSegmentIterator(this,lower,upper,buffer,block);
+        keyFile.readAt(ctx.buffer,block* keyBlockSize);
+        return new DiskSegmentIterator(this,lower,upper,ctx.buffer,block);
     }
 
     private static Removable createRemovable(DiskSegment ds) {
@@ -266,15 +268,16 @@ next:
     }
 
     private OffsetLen binarySearch(byte[] key) throws IOException {
-        ByteBuffer buffer = bufferCache.get();
+        ScanContext ctx = bufferCache.get();
+        ctx.reset();
 
         LowHigh lh = indexSearch(key);
         if(lh==null)
             return null;
 
-        long block = binarySearch0(lh.low, lh.high, key, buffer);
+        long block = binarySearch0(lh.low, lh.high, key, ctx);
 
-        return scanBlock(block, key, buffer);
+        return scanBlock(block, key, ctx);
     }
 
     LowHigh indexSearch(byte[] key) {
@@ -312,15 +315,14 @@ next:
         return new LowHigh(lowblock,highblock);
     }
 
-    private static int compareKeys(byte[] b,ByteBuffer bb){
-        short len = bb.getShort();
-        assert bb.remaining() >= len;
+    private static int compareKeys(byte[] b,byte[] buffer){
+        short len = (short) (buffer[0]<<0+(buffer[1]<<8));
+        int offset=2;
         for(int i=0;i<len;i++){
             if(i==b.length)
                 return -1;
-            int result = Byte.compare(b[i],bb.get());
+            int result = Byte.compare(b[i],buffer[offset+i]);
             if(result!=0) {
-                bb.position(bb.position()+len-i-1);
                 return result;
             }
         }
@@ -329,11 +331,11 @@ next:
         return 0;
     }
 
-    long binarySearch0(long lowBlock, long highBlock, byte[] key, ByteBuffer buffer) throws IOException {
+    long binarySearch0(long lowBlock, long highBlock, byte[] key, ScanContext ctx) throws IOException {
         if(highBlock-lowBlock <= 1) {
             // the key is either in low block or high block, or does not exist, so check high block
-            keyFile.readAt(buffer, highBlock* keyBlockSize, maxKeySize+2);
-            if(compareKeys(key,buffer)<0) {
+            keyFile.readAt(ctx.buffer, highBlock* keyBlockSize, maxKeySize+2);
+            if(compareKeys(key,ctx.buffer)<0) {
                 return lowBlock;
             } else {
                 return highBlock;
@@ -342,44 +344,60 @@ next:
 
         long block = (lowBlock+highBlock)/2;
 
-        keyFile.readAt(buffer, block*Constants.keyBlockSize, maxKeySize+2);
+        keyFile.readAt(ctx.buffer, block*Constants.keyBlockSize, maxKeySize+2);
 
-        if(compareKeys(key,buffer)<0) {
-            return binarySearch0(lowBlock, block-1, key, buffer);
+        if(compareKeys(key,ctx.buffer)<0) {
+            return binarySearch0(lowBlock, block-1, key, ctx);
         } else {
-            return binarySearch0(block, highBlock, key, buffer);
+            return binarySearch0(block, highBlock, key, ctx);
         }
     }
 
-    static final ThreadLocal<ByteBuffer> bufferCache = new ThreadLocal<>(){
+    private static class ScanContext {
+        final KeyBuffer currKey = new KeyBuffer();
+        final KeyBuffer prevKey = new KeyBuffer();
+        final byte[] buffer = new byte[keyBlockSize];
+        final LittleEndianDataInputStream is = new LittleEndianDataInputStream(buffer);
+        void reset() {
+            currKey.clear();
+            prevKey.clear();
+            is.reset();
+        }
+    }
+
+    static final ThreadLocal<ScanContext> bufferCache = new ThreadLocal<>(){
         @Override
-        protected ByteBuffer initialValue() {
-            return ByteBuffer.allocateDirect(keyBlockSize).order(ByteOrder.LITTLE_ENDIAN);
+        protected ScanContext initialValue() {
+            return new ScanContext();
         }
     };
-    OffsetLen scanBlock(long block, byte[] key, ByteBuffer buffer) throws IOException {
-        keyFile.readAt(buffer, block*Constants.keyBlockSize,keyBlockSize);
+    OffsetLen scanBlock(long block, byte[] key,ScanContext ctx) throws IOException {
+        ctx.reset();
 
-        KeyBuffer currKey = new KeyBuffer();
-        KeyBuffer prevKey = new KeyBuffer();
+        keyFile.readAt(ctx.buffer, block*Constants.keyBlockSize,keyBlockSize);
+
+        KeyBuffer currKey = ctx.currKey;
+        KeyBuffer prevKey = ctx.prevKey;
+
+        LittleEndianDataInputStream is = ctx.is;
 
         for(;;) {
-            int keylen = buffer.getShort() & 0xFFFF;
+            int keylen = is.readShort() & 0xFFFF;
             if(keylen == endOfBlock) {
                 return null;
             }
-            CompressedKey.decodeKey(currKey,prevKey,keylen,buffer);
+            CompressedKey.decodeKey(currKey,prevKey,keylen,is);
 
             int result = currKey.compare(key);
             if(result==0) {
-                long offset = buffer.getLong();
-                int len = buffer.getInt();
+                long offset = is.readLong();
+                int len = is.readInt();
                 return new OffsetLen(offset,len);
             }
             if(result>0) {
                 return null;
             }
-            buffer.position(buffer.position()+12);
+            is.skip(12);
             currKey.copyTo(prevKey);
         }
     }
