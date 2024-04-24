@@ -3,3 +3,8 @@
 /test_db/
 /testdb/
 /lib/
+.gradle
+build/
+gradle/
+gradlew
+gradlew.bat
