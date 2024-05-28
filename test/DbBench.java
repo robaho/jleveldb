@@ -2,12 +2,15 @@ import com.robaho.jleveldb.exceptions.DatabaseException;
 import com.robaho.jleveldb.exceptions.DatabaseNotFound;
 import com.robaho.jleveldb.Options;
 import com.robaho.jleveldb.WriteBatch;
+
 import junit.framework.TestCase;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 
@@ -126,12 +129,17 @@ import static com.robaho.jleveldb.Database.remove;
     private static void _testRandom() throws IOException, DatabaseException {
         var db = open(dbname,new Options());
 
-        var start = System.currentTimeMillis();
-
         var r = new Random();
 
-        for(int i = 0; i < nr; i++) {
-            int index = r.nextInt(nr);
+        List<Integer> keys = new ArrayList(nr);
+        for(int i=0;i<nr;i++) {
+            keys.add(i);
+        }
+        Collections.shuffle(keys);
+        
+        var start = System.currentTimeMillis();
+
+        for(int index : keys) {
             var key = String.format("%0"+kSize+"d",index).getBytes();
             if(db.get(key)==null) {
                 throw new IllegalStateException("key not found "+new String(key));
