@@ -1,5 +1,7 @@
 plugins {
     id 'java'
+    id 'application'
+    id 'org.graalvm.buildtools.native' version '0.10.2'
 }
 
 repositories {
@@ -19,8 +21,16 @@ sourceSets {
     }
 }
 
+tasks.named('jar') {
+    from(sourceSets.test.output)
+}
+
 test {
     useJUnitPlatform()
+}
+
+application {
+    mainClass = 'DbBenchMain'
 }
 
 dependencies {
