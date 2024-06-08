@@ -28,7 +28,7 @@ class LogFile {
             disableFlush = true;
         }
         
-        w = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(filepath,file_options.toArray(new StandardOpenOption[file_options.size()]))));
+        w = new DataOutputStream(new BufferedOS(Files.newOutputStream(filepath,file_options.toArray(new StandardOpenOption[file_options.size()]))));
     }
     public void startBatch(int len) throws IOException {
         inBatch = true;

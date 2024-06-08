@@ -30,9 +30,8 @@ class Merger {
             db.unlock();
 
             try {
-                mergeSegments0(db, Constants.maxSegments);
+                mergeSegments0(db, Constants.maxSegments,true);
             } catch (Exception e) {
-                e.printStackTrace();
                 db.lock();
                 db.error = e;
                 db.unlock();
@@ -46,17 +45,17 @@ class Merger {
         LockSupport.unpark(mergerThread);
     }
 
-    static void mergeSegments0(Database db, int segmentCount) throws IOException {
+    static void mergeSegments0(Database db, int segmentCount, boolean throttle) throws IOException {
         if(!db.inMerge.compareAndSet(false,true))
             return;
         try {
-            mergeDiskSegments0Exclusive(db,segmentCount);
+            mergeDiskSegments0Exclusive(db,segmentCount,throttle);
         } finally {
             db.inMerge.set(false);
         }
     }
 
-    static void mergeDiskSegments0Exclusive(Database db,int segmentCount) throws IOException {
+    static void mergeDiskSegments0Exclusive(Database db,int segmentCount,boolean throttle) throws IOException {
         // must hold the inMerge lock, only a single routine can be here
 
         while(true) {
@@ -119,7 +118,9 @@ class Merger {
                 db.state = new DatabaseState(newSegments, db.state.memory, new MultiSegment(Segment.copyAndAppend(newSegments, db.state.memory)));
             } finally {
                 db.unlock();
-                LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+                if(throttle) {
+                    LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+                }
             }
         }
     }

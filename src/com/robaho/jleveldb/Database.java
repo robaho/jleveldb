@@ -232,7 +232,7 @@ public class Database {
                 state=new DatabaseState(Segment.copyAndAppend(state.segments,state.memory),null,null);
 
                 if (numberOfSegments > 0) {
-                    Merger.mergeSegments0(this, numberOfSegments);
+                    Merger.mergeSegments0(this, numberOfSegments,false);
                 }
 
                 lock();

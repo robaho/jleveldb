@@ -18,7 +18,7 @@ public class DbDeleter implements Deleter {
     public synchronized void scheduleDeletion(List<String> filesToDelete) throws IOException {
         if(file==null) {
             List<StandardOpenOption> file_options = Arrays.asList(StandardOpenOption.APPEND,StandardOpenOption.WRITE,StandardOpenOption.CREATE,StandardOpenOption.SYNC);
-            file = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Path.of(path+"/deleted"),file_options.toArray(new StandardOpenOption[file_options.size()]))));
+            file = new DataOutputStream(new BufferedOS(Files.newOutputStream(Path.of(path+"/deleted"),file_options.toArray(new StandardOpenOption[file_options.size()]))));
         }
         file.write((String.join(",",filesToDelete)+"\n").getBytes());
     }

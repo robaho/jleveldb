@@ -354,13 +354,11 @@ next:
     }
 
     private static class ScanContext {
-        final KeyBuffer currKey = new KeyBuffer();
-        final KeyBuffer prevKey = new KeyBuffer();
+        final KeyBuffer key = new KeyBuffer();
         final byte[] buffer = new byte[keyBlockSize];
         final LittleEndianDataInputStream is = new LittleEndianDataInputStream(buffer);
         void reset() {
-            currKey.clear();
-            prevKey.clear();
+            key.clear();
             is.reset();
         }
     }
@@ -376,17 +374,16 @@ next:
 
         keyFile.readAt(ctx.buffer, block*Constants.keyBlockSize,keyBlockSize);
 
-        KeyBuffer currKey = ctx.currKey;
-        KeyBuffer prevKey = ctx.prevKey;
-
         LittleEndianDataInputStream is = ctx.is;
+
+        KeyBuffer currKey = ctx.key;
 
         for(;;) {
             int keylen = is.readShort() & 0xFFFF;
             if(keylen == endOfBlock) {
                 return null;
             }
-            CompressedKey.decodeKey(currKey,prevKey,keylen,is);
+            CompressedKey.decodeKey(currKey,keylen,is);
 
             int result = currKey.compare(key);
             if(result==0) {
@@ -398,7 +395,6 @@ next:
                 return null;
             }
             is.skip(12);
-            currKey.copyTo(prevKey);
         }
     }
 

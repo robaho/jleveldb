@@ -8,46 +8,24 @@ import java.util.Arrays;
 final class KeyBuffer {
     final byte[] buffer = new byte[1024];
     int len=0;
-    int offset=1024;
 
     KeyBuffer(){}
 
-    void copyTo(KeyBuffer dst) {
-        dst.len=len;
-        dst.offset=offset;
-        System.arraycopy(buffer,offset,dst.buffer,offset,len);
-    }
     int compare(byte[] bytes) {
-        return Arrays.compare(buffer,offset,offset+len,bytes,0,bytes.length);
+        return Arrays.compare(buffer,0,len,bytes,0,bytes.length);
     }
-    public void from(InputStream src, int len) throws IOException {
-        offset=1024-len;
+    public void from(InputStream src, int len, int offset) throws IOException {
         src.read(buffer,offset,len);
-        this.len=len;
-    }
-    public void insertPrefix(KeyBuffer prefixKey, int prefixLen) {
-        offset-=prefixLen;
-        System.arraycopy(prefixKey.buffer,prefixKey.offset,buffer,offset,prefixLen);
-        this.len+=prefixLen;
+        this.len=offset+len;
     }
 
     public void clear() {
-        len=0;offset=1024;
+        len=0;
     }
 
     public byte[] toBytes() {
         byte[] bytes = new byte[len];
-        System.arraycopy(buffer,offset,bytes,0,len);
+        System.arraycopy(buffer,0,bytes,0,len);
         return bytes;
-    }
-
-    public void fromBytes(byte[] bytes) {
-        if(bytes==null) {
-            len=0;offset=1024;
-            return;
-        }
-        len=bytes.length;
-        offset = 1024-len;
-        System.arraycopy(bytes,0,buffer,offset,len);
     }
 }

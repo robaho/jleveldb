@@ -20,7 +20,6 @@ class DiskSegmentIterator implements LookupIterator{
     final byte[] lower,upper;
 
     final KeyBuffer currKey=new KeyBuffer();
-    final KeyBuffer prevKey=new KeyBuffer();
 
     long block;
 
@@ -70,7 +69,6 @@ class DiskSegmentIterator implements LookupIterator{
         if(finished) {
             return true;
         }
-        prevKey.fromBytes(key);
 
         while(true) {
             int keylen = is.readShort() & 0xFFFF;
@@ -87,12 +85,10 @@ class DiskSegmentIterator implements LookupIterator{
                 is = new LittleEndianDataInputStream(buffer,0,len);
                 if(is.available()!=keyBlockSize)
                     throw new IOException("unable to read keyfile");
-                prevKey.clear();
                 continue;
             }
 
-            CompressedKey.decodeKey(currKey,prevKey,keylen,is);
-            currKey.copyTo(prevKey);
+            CompressedKey.decodeKey(currKey,keylen,is);
 
             long dataoffset = is.readLong();
             int datalen = is.readInt();
